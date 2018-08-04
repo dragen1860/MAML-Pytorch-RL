@@ -9,7 +9,7 @@ from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
 
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
@@ -22,14 +22,12 @@ def main(args):
 
 	args.output_folder = args.env_name
 
-	for arg in vars(args):
-		print(arg, getattr(args, arg))
-
+	# TODO
 	continuous_actions = (args.env_name in ['AntVel-v1', 'AntDir-v1',
 	                                        'AntPos-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
 	                                        '2DNavigation-v0'])
 
-	writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
+	# writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
 	save_folder = './saves/{0}'.format(args.output_folder)
 	if not os.path.exists(save_folder):
 		os.makedirs(save_folder)
@@ -39,6 +37,7 @@ def main(args):
 		config = {k: v for (k, v) in vars(args).items() if k != 'device'}
 		config.update(device=args.device.type)
 		json.dump(config, f, indent=2)
+		print(config)
 
 	sampler = BatchSampler(args.env_name, batch_size=args.fast_batch_size, num_workers=args.num_workers)
 
@@ -46,7 +45,7 @@ def main(args):
 		policy = NormalMLPPolicy(
 			int(np.prod(sampler.envs.observation_space.shape)), # input shape
 			int(np.prod(sampler.envs.action_space.shape)), # output shape
-			hidden_sizes=(args.hidden_size,) * args.num_layers)
+			hidden_sizes=(args.hidden_size,) * args.num_layers) # [100, 100]
 	else:
 		policy = CategoricalMLPPolicy(
 			int(np.prod(sampler.envs.observation_space.shape)),
@@ -58,24 +57,25 @@ def main(args):
 	metalearner = MetaLearner(sampler, policy, baseline, gamma=args.gamma,
 	                          fast_lr=args.fast_lr, tau=args.tau, device=args.device)
 
-	for batch in range(args.num_batches):
+	for batch in range(args.num_batches): # number of epoches
 
 		tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
 		episodes = metalearner.sample(tasks, first_order=args.first_order)
+
 		metalearner.step(episodes, max_kl=args.max_kl, cg_iters=args.cg_iters,
 		                 cg_damping=args.cg_damping, ls_max_steps=args.ls_max_steps,
 		                 ls_backtrack_ratio=args.ls_backtrack_ratio)
 
 		# Tensorboard
-		writer.add_scalar('total_rewards/before_update',
-		                  total_rewards([ep.rewards for ep, _ in episodes]), batch)
-		writer.add_scalar('total_rewards/after_update',
-		                  total_rewards([ep.rewards for _, ep in episodes]), batch)
+		# writer.add_scalar('total_rewards/before_update',
+		#                   total_rewards([ep.rewards for ep, _ in episodes]), batch)
+		# writer.add_scalar('total_rewards/after_update',
+		#                   total_rewards([ep.rewards for _, ep in episodes]), batch)
 
-		# Save policy network
-		with open(os.path.join(save_folder,
-		                       'policy-{0}.pt'.format(batch)), 'wb') as f:
-			torch.save(policy.state_dict(), f)
+
+		# # Save policy network
+		# with open(os.path.join(save_folder, 'policy-{0}.pt'.format(batch)), 'wb') as f:
+		# 	torch.save(policy.state_dict(), f)
 
 		print(batch, total_rewards([ep.rewards for ep, _ in episodes]), total_rewards([ep.rewards for _, ep in episodes]))
 
@@ -93,7 +93,7 @@ if __name__ == '__main__':
 	                                             'Model-Agnostic Meta-Learning (MAML)')
 
 	# General
-	parser.add_argument('--env-name', type=str, default='CartPole-v1',
+	parser.add_argument('--env-name', type=str, default='HalfCheetahDir-v1',
 	                    help='name of the environment')
 	parser.add_argument('--gamma', type=float, default=0.95,
 	                    help='value of the discount factor gamma')
@@ -111,7 +111,7 @@ if __name__ == '__main__':
 	# Task-specific
 	parser.add_argument('--fast-batch-size', type=int, default=20,
 	                    help='batch size for each individual task')
-	parser.add_argument('--fast-lr', type=float, default=0.5,
+	parser.add_argument('--fast-lr', type=float, default=0.1, # 0.5
 	                    help='learning rate for the 1-step gradient update of MAML')
 
 	# Optimization
@@ -131,7 +131,7 @@ if __name__ == '__main__':
 	                    help='maximum number of iterations for line search')
 
 	# Miscellaneous
-	parser.add_argument('--output-folder', type=str, default='CartPole-v1',
+	parser.add_argument('--output-folder', type=str, default='HalfCheetahDir-v1',
 	                    help='name of the output folder')
 	parser.add_argument('--num-workers', type=int, default=mp.cpu_count(),
 	                    help='number of workers for trajectories sampling')
@@ -146,8 +146,7 @@ if __name__ == '__main__':
 	if not os.path.exists('./saves'):
 		os.makedirs('./saves')
 	# Device
-	args.device = torch.device(args.device
-	                           if torch.cuda.is_available() else 'cpu')
+	args.device = torch.device(args.device if torch.cuda.is_available() else 'cpu')
 	# Slurm
 	if 'SLURM_JOB_ID' in os.environ:
 		args.output_folder += '-{0}'.format(os.environ['SLURM_JOB_ID'])

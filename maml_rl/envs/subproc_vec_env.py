@@ -4,45 +4,67 @@ import gym
 import sys
 
 is_py2 = (sys.version[0] == '2')
-if is_py2:
+if is_py2: # for python 2.7 support
 	import Queue as queue
 else:
 	import queue as queue
 
 
 class EnvWorker(mp.Process):
-	def __init__(self, remote, env_fn, queue, lock):
+
+	def __init__(self, remote, env_fn, queue_, lock):
+		"""
+
+		:param remote: send/recv connection, type of Pipe
+		:param env_fn: construct environment function
+		:param queue_: global queue instance
+		:param lock: Every worker has a lock
+		"""
 		super(EnvWorker, self).__init__()
+
 		self.remote = remote
 		self.env = env_fn()
-		self.queue = queue
+		self.queue = queue_
 		self.lock = lock
 		self.task_id = None
 		self.done = False
 
 	def empty_step(self):
-		observation = np.zeros(self.env.observation_space.shape,
-		                       dtype=np.float32)
+		"""
+
+		:return:
+		"""
+		observation = np.zeros(self.env.observation_space.shape, dtype=np.float32)
 		reward, done = 0.0, True
+
 		return observation, reward, done, {}
 
 	def try_reset(self):
+		"""
+
+		:return:
+		"""
 		with self.lock:
 			try:
 				self.task_id = self.queue.get(True)
 				self.done = (self.task_id is None)
 			except queue.Empty:
 				self.done = True
-		observation = (np.zeros(self.env.observation_space.shape,
-		                        dtype=np.float32) if self.done else self.env.reset())
+
+		# construct empty state or get state from env.reset()
+		observation = np.zeros(self.env.observation_space.shape, dtype=np.float32) if self.done else self.env.reset()
+
 		return observation
 
 	def run(self):
+		"""
+
+		:return:
+		"""
 		while True:
 			command, data = self.remote.recv()
 			if command == 'step':
-				observation, reward, done, info = (self.empty_step()
-				                                   if self.done else self.env.step(data))
+				observation, reward, done, info = (self.empty_step() if self.done else self.env.step(data))
 				if done and (not self.done):
 					observation = self.try_reset()
 				self.remote.send((observation, reward, done, self.task_id, info))
@@ -56,23 +78,34 @@ class EnvWorker(mp.Process):
 				self.remote.close()
 				break
 			elif command == 'get_spaces':
-				self.remote.send((self.env.observation_space,
-				                  self.env.action_space))
+				self.remote.send((self.env.observation_space, self.env.action_space))
 			else:
 				raise NotImplementedError()
 
 
 class SubprocVecEnv(gym.Env):
-	def __init__(self, env_factory, queue):
+
+	def __init__(self, env_factory, queue_):
+		"""
+
+		:param env_factory: list of [lambda x: def p: envs.make(env_name), return p], len: num_workers
+		:param queue:
+		"""
 		self.lock = mp.Lock()
+		# remotes: all recv conn, len: 8, here duplex=True
+		# works_remotes: all send conn, len: 8, here duplex=True
 		self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in env_factory])
-		self.workers = [EnvWorker(remote, env_fn, queue, self.lock)
-		                for (remote, env_fn) in zip(self.work_remotes, env_factory)]
+
+		# queue and lock is shared.
+		self.workers = [EnvWorker(remote, env_fn, queue_, self.lock)
+		                    for (remote, env_fn) in zip(self.work_remotes, env_factory)]
+		# start 8 processes to interact with environments.
 		for worker in self.workers:
 			worker.daemon = True
 			worker.start()
 		for remote in self.work_remotes:
 			remote.close()
+
 		self.waiting = False
 		self.closed = False
 

@@ -30,7 +30,8 @@ class HalfCheetahEnv(HalfCheetahEnv_):
 
 
 class HalfCheetahVelEnv(HalfCheetahEnv):
-	"""Half-cheetah environment with target velocity, as described in [1]. The 
+	"""
+	Half-cheetah environment with target velocity, as described in [1]. The
 	code is adapted from
 	https://github.com/cbfinn/maml_rl/blob/9c8e2ebd741cb0c7b8bf2d040c4caeeb8e06cc95/rllab/envs/mujoco/half_cheetah_env_rand.py
 
@@ -80,7 +81,8 @@ class HalfCheetahVelEnv(HalfCheetahEnv):
 
 
 class HalfCheetahDirEnv(HalfCheetahEnv):
-	"""Half-cheetah environment with target direction, as described in [1]. The 
+	"""
+	Half-cheetah environment with target direction, as described in [1]. The
 	code is adapted from
 	https://github.com/cbfinn/maml_rl/blob/9c8e2ebd741cb0c7b8bf2d040c4caeeb8e06cc95/rllab/envs/mujoco/half_cheetah_env_rand_direc.py
 

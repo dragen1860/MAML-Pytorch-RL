@@ -7,6 +7,11 @@ from maml_rl.episode import BatchEpisodes
 
 
 def make_env(env_name):
+	"""
+	return a function
+	:param env_name:
+	:return:
+	"""
 	def _make_env():
 		return gym.make(env_name)
 
@@ -27,8 +32,8 @@ class BatchSampler:
 		self.num_workers = num_workers
 
 		self.queue = mp.Queue()
-		self.envs = SubprocVecEnv([make_env(env_name) for _ in range(num_workers)],
-		                          queue=self.queue)
+		# [lambda function]
+		self.envs = SubprocVecEnv([make_env(env_name) for _ in range(num_workers)], queue_=self.queue)
 		self._env = gym.make(env_name)
 
 	def sample(self, policy, params=None, gamma=0.95, device='cpu'):
