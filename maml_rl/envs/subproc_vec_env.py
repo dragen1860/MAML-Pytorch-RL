@@ -3,11 +3,7 @@ import multiprocessing as mp
 import gym
 import sys
 
-is_py2 = (sys.version[0] == '2')
-if is_py2: # for python 2.7 support
-	import Queue as queue
-else:
-	import queue as queue
+import queue
 
 
 class EnvWorker(mp.Process):
@@ -22,8 +18,8 @@ class EnvWorker(mp.Process):
 		"""
 		super(EnvWorker, self).__init__()
 
-		self.remote = remote
-		self.env = env_fn()
+		self.remote = remote # Pipe()
+		self.env = env_fn() # return a function
 		self.queue = queue_
 		self.lock = lock
 		self.task_id = None
@@ -31,7 +27,7 @@ class EnvWorker(mp.Process):
 
 	def empty_step(self):
 		"""
-
+		conduct a dummy step
 		:return:
 		"""
 		observation = np.zeros(self.env.observation_space.shape, dtype=np.float32)
@@ -46,7 +42,7 @@ class EnvWorker(mp.Process):
 		"""
 		with self.lock:
 			try:
-				self.task_id = self.queue.get(True)
+				self.task_id = self.queue.get(True) # block = True
 				self.done = (self.task_id is None)
 			except queue.Empty:
 				self.done = True
@@ -63,11 +59,13 @@ class EnvWorker(mp.Process):
 		"""
 		while True:
 			command, data = self.remote.recv()
+
 			if command == 'step':
 				observation, reward, done, info = (self.empty_step() if self.done else self.env.step(data))
 				if done and (not self.done):
 					observation = self.try_reset()
 				self.remote.send((observation, reward, done, self.task_id, info))
+
 			elif command == 'reset':
 				observation = self.try_reset()
 				self.remote.send((observation, self.task_id))
@@ -85,20 +83,20 @@ class EnvWorker(mp.Process):
 
 class SubprocVecEnv(gym.Env):
 
-	def __init__(self, env_factory, queue_):
+	def __init__(self, env_factorys, queue_):
 		"""
 
-		:param env_factory: list of [lambda x: def p: envs.make(env_name), return p], len: num_workers
+		:param env_factorys: list of [lambda x: def p: envs.make(env_name), return p], len: num_workers
 		:param queue:
 		"""
 		self.lock = mp.Lock()
 		# remotes: all recv conn, len: 8, here duplex=True
 		# works_remotes: all send conn, len: 8, here duplex=True
-		self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in env_factory])
+		self.remotes, self.work_remotes = zip(*[mp.Pipe() for _ in env_factorys])
 
 		# queue and lock is shared.
 		self.workers = [EnvWorker(remote, env_fn, queue_, self.lock)
-		                    for (remote, env_fn) in zip(self.work_remotes, env_factory)]
+		                    for (remote, env_fn) in zip(self.work_remotes, env_factorys)]
 		# start 8 processes to interact with environments.
 		for worker in self.workers:
 			worker.daemon = True
@@ -106,19 +104,33 @@ class SubprocVecEnv(gym.Env):
 		for remote in self.work_remotes:
 			remote.close()
 
-		self.waiting = False
+		self.waiting = False # for step_async
 		self.closed = False
 
+		# Since the main process need talk to children processes, we need a way to comunicate between these.
+		# here we use mp.Pipe() to send/recv data.
 		self.remotes[0].send(('get_spaces', None))
 		observation_space, action_space = self.remotes[0].recv()
 		self.observation_space = observation_space
 		self.action_space = action_space
 
 	def step(self, actions):
+		"""
+		step synchronously
+		:param actions:
+		:return:
+		"""
 		self.step_async(actions)
+		# wait until step state overdue
 		return self.step_wait()
 
 	def step_async(self, actions):
+		"""
+		step asynchronouly
+		:param actions:
+		:return:
+		"""
+		# let each sub-process step
 		for remote, action in zip(self.remotes, actions):
 			remote.send(('step', action))
 		self.waiting = True
@@ -130,6 +142,10 @@ class SubprocVecEnv(gym.Env):
 		return np.stack(observations), np.stack(rewards), np.stack(dones), task_ids, infos
 
 	def reset(self):
+		"""
+		reset synchronously
+		:return:
+		"""
 		for remote in self.remotes:
 			remote.send(('reset', None))
 		results = [remote.recv() for remote in self.remotes]
@@ -144,7 +160,7 @@ class SubprocVecEnv(gym.Env):
 	def close(self):
 		if self.closed:
 			return
-		if self.waiting:
+		if self.waiting: # cope with step_async()
 			for remote in self.remotes:
 				remote.recv()
 		for remote in self.remotes:

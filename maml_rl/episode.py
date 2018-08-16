@@ -10,6 +10,7 @@ class BatchEpisodes:
 		self.gamma = gamma
 		self.device = device
 
+		# [[], [],...batchsz of []]
 		self._observations_list = [[] for _ in range(batch_size)]
 		self._actions_list = [[] for _ in range(batch_size)]
 		self._rewards_list = [[] for _ in range(batch_size)]
@@ -79,14 +80,20 @@ class BatchEpisodes:
 		return self._mask
 
 	def gae(self, values, tau=1.0):
+		"""
+
+		:param values: [200, 20, 1], tensor
+		:param tau:
+		:return:
+		"""
 		# Add an additional 0 at the end of values for
 		# the estimation at the end of the episode
-		values = values.squeeze(2).detach()
-		values = F.pad(values * self.mask, (0, 0, 0, 1))
+		values = values.squeeze(2).detach() # [200, 20]
+		values = F.pad(values * self.mask, (0, 0, 0, 1)) # [201, 20]
 
-		deltas = self.rewards + self.gamma * values[1:] - values[:-1]
-		advantages = torch.zeros_like(deltas).float()
-		gae = torch.zeros_like(deltas[0]).float()
+		deltas = self.rewards + self.gamma * values[1:] - values[:-1] # [200, 20]
+		advantages = torch.zeros_like(deltas).float() # [200, 20]
+		gae = torch.zeros_like(deltas[0]).float() # [20]
 		for i in range(len(self) - 1, -1, -1):
 			gae = gae * self.gamma * tau + deltas[i]
 			advantages[i] = gae
@@ -94,8 +101,7 @@ class BatchEpisodes:
 		return advantages
 
 	def append(self, observations, actions, rewards, batch_ids):
-		for observation, action, reward, batch_id in zip(
-				observations, actions, rewards, batch_ids):
+		for observation, action, reward, batch_id in zip(observations, actions, rewards, batch_ids):
 			if batch_id is None:
 				continue
 			self._observations_list[batch_id].append(observation.astype(np.float32))

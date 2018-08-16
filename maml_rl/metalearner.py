@@ -1,15 +1,14 @@
-import torch
-from torch.nn.utils.convert_parameters import (vector_to_parameters,
-                                               parameters_to_vector)
-from torch.distributions.kl import kl_divergence
+import  torch
+from    torch.nn.utils.convert_parameters import vector_to_parameters, parameters_to_vector
+from    torch.distributions.kl import kl_divergence
 
-from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
-                                       weighted_normalize)
-from maml_rl.utils.optimization import conjugate_gradient
+from    maml_rl.utils.torch_utils import weighted_mean, detach_distribution, weighted_normalize
+from    maml_rl.utils.optimization import conjugate_gradient
 
 
-class MetaLearner(object):
-	"""Meta-learner
+class MetaLearner:
+	"""
+	Meta-learner
 
 	The meta-learner is responsible for sampling the trajectories/episodes
 	(before and after the one-step adaptation), compute the inner loss, compute
@@ -28,8 +27,7 @@ class MetaLearner(object):
 		(https://arxiv.org/abs/1502.05477)
 	"""
 
-	def __init__(self, sampler, policy, baseline, gamma=0.95,
-	             fast_lr=0.5, tau=1.0, device='cpu'):
+	def __init__(self, sampler, policy, baseline, gamma=0.95, fast_lr=0.5, tau=1.0, device='cpu'):
 		self.sampler = sampler
 		self.policy = policy
 		self.baseline = baseline
@@ -39,7 +37,8 @@ class MetaLearner(object):
 		self.to(device)
 
 	def inner_loss(self, episodes, params=None):
-		"""Compute the inner loss for the one-step gradient update. The inner
+		"""
+		Compute the inner loss for the one-step gradient update. The inner
 		loss is REINFORCE with baseline [2], computed on advantages estimated
 		with Generalized Advantage Estimation (GAE, [3]).
 		"""
@@ -48,7 +47,8 @@ class MetaLearner(object):
 		advantages = weighted_normalize(advantages, weights=episodes.mask)
 
 		pi = self.policy(episodes.observations, params=params)
-		log_probs = pi.log_prob(episodes.actions)
+		# return the log_prob at value
+		log_probs = pi.log_prob(episodes.actions) # [200, 20, 6]
 		if log_probs.dim() > 2:
 			log_probs = torch.sum(log_probs, dim=2)
 		loss = -weighted_mean(log_probs * advantages, weights=episodes.mask)
@@ -56,7 +56,8 @@ class MetaLearner(object):
 		return loss
 
 	def adapt(self, episodes, first_order=False):
-		"""Adapt the parameters of the policy network to a new task, from
+		"""
+		Adapt the parameters of the policy network to a new task, from
 		sampled trajectories `episodes`, with a one-step gradient update [1].
 		"""
 		# Fit the baseline to the training episodes
@@ -64,25 +65,23 @@ class MetaLearner(object):
 		# Get the loss on the training episodes
 		loss = self.inner_loss(episodes)
 		# Get the new parameters after a one-step gradient update
-		params = self.policy.update_params(loss, step_size=self.fast_lr,
-		                                   first_order=first_order)
+		params = self.policy.update_params(loss, step_size=self.fast_lr, first_order=first_order)
 
 		return params
 
 	def sample(self, tasks, first_order=False):
-		"""Sample trajectories (before and after the update of the parameters)
+		"""
+		Sample trajectories (before and after the update of the parameters)
 		for all the tasks `tasks`.
 		"""
 		episodes = []
 		for task in tasks:
 			self.sampler.reset_task(task)
-			train_episodes = self.sampler.sample(self.policy,
-			                                     gamma=self.gamma, device=self.device)
+			train_episodes = self.sampler.sample(self.policy, gamma=self.gamma, device=self.device)
 
 			params = self.adapt(train_episodes, first_order=first_order)
 
-			valid_episodes = self.sampler.sample(self.policy, params=params,
-			                                     gamma=self.gamma, device=self.device)
+			valid_episodes = self.sampler.sample(self.policy, params=params, gamma=self.gamma, device=self.device)
 			episodes.append((train_episodes, valid_episodes))
 		return episodes
 
@@ -107,7 +106,9 @@ class MetaLearner(object):
 		return torch.mean(torch.stack(kls, dim=0))
 
 	def hessian_vector_product(self, episodes, damping=1e-2):
-		"""Hessian-vector product, based on the Perlmutter method."""
+		"""
+		Hessian-vector product, based on the Perlmutter method.
+		"""
 
 		def _product(vector):
 			kl = self.kl_divergence(episodes)
@@ -130,6 +131,7 @@ class MetaLearner(object):
 
 		for (train_episodes, valid_episodes), old_pi in zip(episodes, old_pis):
 			params = self.adapt(train_episodes)
+
 			with torch.set_grad_enabled(old_pi is None):
 				pi = self.policy(valid_episodes.observations, params=params)
 				pis.append(detach_distribution(pi))
@@ -158,12 +160,11 @@ class MetaLearner(object):
 				kl = weighted_mean(kl_divergence(pi, old_pi), weights=mask)
 				kls.append(kl)
 
-		return (torch.mean(torch.stack(losses, dim=0)),
-		        torch.mean(torch.stack(kls, dim=0)), pis)
+		return (torch.mean(torch.stack(losses, dim=0)), torch.mean(torch.stack(kls, dim=0)), pis)
 
-	def step(self, episodes, max_kl=1e-3, cg_iters=10, cg_damping=1e-2,
-	         ls_max_steps=10, ls_backtrack_ratio=0.5):
-		"""Meta-optimization step (ie. update of the initial parameters), based
+	def step(self, episodes, max_kl=1e-3, cg_iters=10, cg_damping=1e-2, ls_max_steps=10, ls_backtrack_ratio=0.5):
+		"""
+		Meta-optimization step (ie. update of the initial parameters), based
 		on Trust Region Policy Optimization (TRPO, [4]).
 		"""
 		old_loss, _, old_pis = self.surrogate_loss(episodes)
@@ -171,10 +172,9 @@ class MetaLearner(object):
 		grads = parameters_to_vector(grads)
 
 		# Compute the step direction with Conjugate Gradient
-		hessian_vector_product = self.hessian_vector_product(episodes,
-		                                                     damping=cg_damping)
-		stepdir = conjugate_gradient(hessian_vector_product, grads,
-		                             cg_iters=cg_iters)
+		# return a function
+		hessian_vector_product = self.hessian_vector_product(episodes, damping=cg_damping)
+		stepdir = conjugate_gradient(hessian_vector_product, grads, cg_iters=cg_iters)
 
 		# Compute the Lagrange multiplier
 		shs = 0.5 * torch.dot(stepdir, hessian_vector_product(stepdir))
@@ -188,8 +188,7 @@ class MetaLearner(object):
 		# Line search
 		step_size = 1.0
 		for _ in range(ls_max_steps):
-			vector_to_parameters(old_params - step_size * step,
-			                     self.policy.parameters())
+			vector_to_parameters(old_params - step_size * step, self.policy.parameters())
 			loss, kl, _ = self.surrogate_loss(episodes, old_pis=old_pis)
 			improve = loss - old_loss
 			if (improve.item() < 0.0) and (kl.item() < max_kl):

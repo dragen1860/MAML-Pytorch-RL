@@ -3,7 +3,8 @@ import torch.nn as nn
 
 
 class LinearFeatureBaseline(nn.Module):
-	"""Linear baseline based on handcrafted features, as described in [1]
+	"""
+	Linear baseline based on handcrafted features, as described in [1]
 	(Supplementary Material 2).
 
 	[1] Yan Duan, Xi Chen, Rein Houthooft, John Schulman, Pieter Abbeel,

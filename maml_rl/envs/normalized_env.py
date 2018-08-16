@@ -4,7 +4,8 @@ from gym import spaces
 
 
 class NormalizedActionWrapper(gym.ActionWrapper):
-	"""Environment wrapper to normalize the action space to [-1, 1]. This 
+	"""
+	Environment wrapper to normalize the action space to [-1, 1]. This
 	wrapper is adapted from rllab's [1] wrapper `NormalizedEnv`
 	https://github.com/rll/rllab/blob/b3a28992eca103cab3cb58363dd7a4bb07f250a0/rllab/envs/normalized_env.py
 
@@ -36,7 +37,8 @@ class NormalizedActionWrapper(gym.ActionWrapper):
 
 
 class NormalizedObservationWrapper(gym.ObservationWrapper):
-	"""Environment wrapper to normalize the observations with a running mean 
+	"""
+	Environment wrapper to normalize the observations with a running mean
 	and standard deviation. This wrapper is adapted from rllab's [1] 
 	wrapper `NormalizedEnv`
 	https://github.com/rll/rllab/blob/b3a28992eca103cab3cb58363dd7a4bb07f250a0/rllab/envs/normalized_env.py
@@ -62,7 +64,8 @@ class NormalizedObservationWrapper(gym.ObservationWrapper):
 
 
 class NormalizedRewardWrapper(gym.RewardWrapper):
-	"""Environment wrapper to normalize the rewards with a running mean 
+	"""
+	Environment wrapper to normalize the rewards with a running mean
 	and standard deviation. This wrapper is adapted from rllab's [1] 
 	wrapper `NormalizedEnv`
 	https://github.com/rll/rllab/blob/b3a28992eca103cab3cb58363dd7a4bb07f250a0/rllab/envs/normalized_env.py

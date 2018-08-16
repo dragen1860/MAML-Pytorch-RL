@@ -1,9 +1,9 @@
-import gym
-import torch
-import multiprocessing as mp
+import  gym
+import  torch
+import  multiprocessing as mp
 
-from maml_rl.envs.subproc_vec_env import SubprocVecEnv
-from maml_rl.episode import BatchEpisodes
+from    maml_rl.envs.subproc_vec_env import SubprocVecEnv
+from    maml_rl.episode import BatchEpisodes
 
 
 def make_env(env_name):
@@ -33,7 +33,10 @@ class BatchSampler:
 
 		self.queue = mp.Queue()
 		# [lambda function]
-		self.envs = SubprocVecEnv([make_env(env_name) for _ in range(num_workers)], queue_=self.queue)
+		env_factorys = [make_env(env_name) for _ in range(num_workers)]
+		# this is the main process manager, and it will be in charge of num_workers sub-processes interacting with
+		# environment.
+		self.envs = SubprocVecEnv(env_factorys, queue_=self.queue)
 		self._env = gym.make(env_name)
 
 	def sample(self, policy, params=None, gamma=0.95, device='cpu'):
@@ -53,14 +56,23 @@ class BatchSampler:
 
 		observations, batch_ids = self.envs.reset()
 		dones = [False]
-		while (not all(dones)) or (not self.queue.empty()):
+		while (not all(dones)) or (not self.queue.empty()): # if all done and queue is empty
+			# for reinforcement learning, the forward process requires no-gradient
 			with torch.no_grad():
+				# convert observation to cuda
+				# compute policy on cuda
+				# convert action to cpu
 				observations_tensor = torch.from_numpy(observations).to(device=device)
+				# forward via policy network
+				# policy network will return Categorical(logits=logits)
 				actions_tensor = policy(observations_tensor, params=params).sample()
 				actions = actions_tensor.cpu().numpy()
+
 			new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
+			# here is observations NOT new_observations, batch_ids NOT new_batch_ids
 			episodes.append(observations, actions, rewards, batch_ids)
 			observations, batch_ids = new_observations, new_batch_ids
+
 		return episodes
 
 	def reset_task(self, task):

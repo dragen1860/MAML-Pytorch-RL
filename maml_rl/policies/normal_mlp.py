@@ -9,7 +9,8 @@ from maml_rl.policies.policy import Policy, weight_init
 
 
 class NormalMLPPolicy(Policy):
-	"""Policy network based on a multi-layer perceptron (MLP), with a
+	"""
+	Policy network based on a multi-layer perceptron (MLP), with a
 	`Normal` distribution output, with trainable standard deviation. This
 	policy network can be used on tasks with continuous action spaces (eg.
 	`HalfCheetahDir`). The code is adapted from
