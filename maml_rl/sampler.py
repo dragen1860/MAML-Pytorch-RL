@@ -1,6 +1,7 @@
 import  gym
 import  torch
 import  multiprocessing as mp
+import numpy as np
 
 from    maml_rl.envs.subproc_vec_env import SubprocVecEnv
 from    maml_rl.episode import BatchEpisodes
@@ -62,6 +63,15 @@ class BatchSampler:
 				# convert observation to cuda
 				# compute policy on cuda
 				# convert action to cpu
+
+				nopertobs = observations
+
+				# Perturbed model
+				# =======================
+				# perturbations = np.random.uniform(-1, 1, observations.shape)
+				# observations += perturbations
+				# =======================
+				
 				observations_tensor = torch.from_numpy(observations).to(device=device)
 				# forward via policy network
 				# policy network will return Categorical(logits=logits)
@@ -70,7 +80,7 @@ class BatchSampler:
 
 			new_observations, rewards, dones, new_batch_ids, _ = self.envs.step(actions)
 			# here is observations NOT new_observations, batch_ids NOT new_batch_ids
-			episodes.append(observations, actions, rewards, batch_ids)
+			episodes.append(observations, nopertobs, actions, rewards, batch_ids)
 			observations, batch_ids = new_observations, new_batch_ids
 
 		return episodes

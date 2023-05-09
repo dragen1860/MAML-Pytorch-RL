@@ -18,6 +18,7 @@ class LinearFeatureBaseline(nn.Module):
 		self._reg_coeff = reg_coeff
 		self.linear = nn.Linear(self.feature_size, 1, bias=False)
 		self.linear.weight.data.zero_()
+		self.epsilon = 0.1
 
 	@property
 	def feature_size(self):
@@ -26,6 +27,7 @@ class LinearFeatureBaseline(nn.Module):
 	def _feature(self, episodes):
 		ones = episodes.mask.unsqueeze(2)
 		observations = episodes.observations * ones
+		# observations = episodes.nopertobs * ones
 		cum_sum = torch.cumsum(ones, dim=0) * ones
 		al = cum_sum / 100.0
 
@@ -43,10 +45,10 @@ class LinearFeatureBaseline(nn.Module):
 		                device=self.linear.weight.device)
 		for _ in range(5):
 			try:
-				coeffs, _ = torch.gels(
-					torch.matmul(featmat.t(), returns),
-					torch.matmul(featmat.t(), featmat) + reg_coeff * eye
-				)
+				coeffs = torch.linalg.lstsq(
+					torch.matmul(featmat.t(), featmat) + reg_coeff * eye,
+					torch.matmul(featmat.t(), returns)
+				).solution
 				break
 			except RuntimeError:
 				reg_coeff += 10
@@ -59,4 +61,31 @@ class LinearFeatureBaseline(nn.Module):
 
 	def forward(self, episodes):
 		features = self._feature(episodes)
-		return self.linear(features)
+
+		# IBP Lower Bound
+		# =================================
+		# out = torch.empty((0,))
+		# out_ep = torch.empty((0,))
+		# for feature_ep in features:
+		# 	for feature_worker in feature_ep:
+		# 		l, u =  self.compute_bounds(feature_worker, layer=self.linear)
+		# 		out_ep = torch.cat((out_ep, l.unsqueeze(0)))
+		# 	out = torch.cat((out, out_ep.unsqueeze(0)))
+		# 	out_ep = torch.empty((0,))
+		# value = out
+		# =================================
+
+		value = self.linear(features)
+		return value
+
+	def compute_bounds(self, x_bounds, layer):
+		l = torch.full_like(x_bounds, -self.epsilon)
+		u = torch.full_like(x_bounds, self.epsilon)
+		l += x_bounds
+		u += x_bounds
+		W, b = layer.weight, layer.bias
+		# l_out = torch.matmul(W.clamp(min=0), l) + torch.matmul(W.clamp(max=0), u) + b
+		# u_out = torch.matmul(W.clamp(min=0), u) + torch.matmul(W.clamp(max=0), l) + b
+		l_out = torch.matmul(W.clamp(min=0), l) + torch.matmul(W.clamp(max=0), u)
+		u_out = torch.matmul(W.clamp(min=0), u) + torch.matmul(W.clamp(max=0), l)
+		return l_out, u_out

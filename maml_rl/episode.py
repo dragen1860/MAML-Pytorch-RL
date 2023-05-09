@@ -14,12 +14,15 @@ class BatchEpisodes:
 		self._observations_list = [[] for _ in range(batch_size)]
 		self._actions_list = [[] for _ in range(batch_size)]
 		self._rewards_list = [[] for _ in range(batch_size)]
+		self._nopertobs_list = [[] for _ in range(batch_size)]
+
 		self._mask_list = []
 
 		self._observations = None
 		self._actions = None
 		self._rewards = None
 		self._returns = None
+		self._nopertobs = None
 		self._mask = None
 
 	@property
@@ -33,6 +36,18 @@ class BatchEpisodes:
 				observations[:length, i] = np.stack(self._observations_list[i], axis=0)
 			self._observations = torch.from_numpy(observations).to(self.device)
 		return self._observations
+
+	@property
+	def nopertobs(self):
+		if self._nopertobs is None:
+			nopertobs_shape = self._nopertobs_list[0][0].shape
+			nopertobs = np.zeros((len(self), self.batch_size)
+			                        + nopertobs_shape, dtype=np.float32)
+			for i in range(self.batch_size):
+				length = len(self._nopertobs_list[i])
+				nopertobs[:length, i] = np.stack(self._nopertobs_list[i], axis=0)
+			self._nopertobs = torch.from_numpy(nopertobs).to(self.device)
+		return self._nopertobs
 
 	@property
 	def actions(self):
@@ -100,13 +115,14 @@ class BatchEpisodes:
 
 		return advantages
 
-	def append(self, observations, actions, rewards, batch_ids):
-		for observation, action, reward, batch_id in zip(observations, actions, rewards, batch_ids):
+	def append(self, observations, nopertobs, actions, rewards, batch_ids):
+		for observation, nopertobs, action, reward, batch_id in zip(observations, nopertobs, actions, rewards, batch_ids):
 			if batch_id is None:
 				continue
 			self._observations_list[batch_id].append(observation.astype(np.float32))
 			self._actions_list[batch_id].append(action.astype(np.float32))
 			self._rewards_list[batch_id].append(reward.astype(np.float32))
+			self._nopertobs_list[batch_id].append(nopertobs.astype(np.float32))
 
 	def __len__(self):
 		return max(map(len, self._rewards_list))
