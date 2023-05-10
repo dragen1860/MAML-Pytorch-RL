@@ -19,6 +19,8 @@ class LinearFeatureBaseline(nn.Module):
 		self.linear = nn.Linear(self.feature_size, 1, bias=False)
 		self.linear.weight.data.zero_()
 		self.epsilon = 0.1
+		self.optimizer = th.optim.Adam(self.parameters(), lr=reg_coeff)
+
 
 	@property
 	def feature_size(self):
@@ -58,7 +60,10 @@ class LinearFeatureBaseline(nn.Module):
 			                   'matrix) is not full-rank, regardless of the regularization '
 			                   '(maximum regularization: {0}).'.format(reg_coeff))
 		self.linear.weight.data = coeffs.data.t()
-
+	
+	def update_params(self):
+		
+	
 	def forward(self, episodes):
 		features = self._feature(episodes)
 
