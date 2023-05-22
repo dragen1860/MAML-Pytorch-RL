@@ -10,8 +10,8 @@ from maml_rl.policies import CategoricalMLPPolicy, NormalMLPPolicy
 from maml_rl.baseline import LinearFeatureBaseline
 from maml_rl.sampler import BatchSampler
 
-from tensorboardX import SummaryWriter
-
+# from tensorboardX import SummaryWriter
+import wandb
 
 def total_rewards(episodes_rewards, aggregation=torch.mean):
 	rewards = torch.mean(torch.stack([aggregation(torch.sum(rewards, dim=0))
@@ -22,13 +22,20 @@ def total_rewards(episodes_rewards, aggregation=torch.mean):
 def main(args):
 
 	args.output_folder = args.env_name
+	wandb.init(project="maml",
+	    config={
+		    "mlp": 0,
+		})
+	np.random.seed(42)
+	task_rand = 2 * np.random.binomial(1, p=0.5, size=(1500, args.meta_batch_size)) - 1
 
+	
 	# TODO
 	continuous_actions = (args.env_name in ['AntVel-v1', 'AntDir-v1',
 	                                        'AntPos-v0', 'HalfCheetahVel-v1', 'HalfCheetahDir-v1',
 	                                        '2DNavigation-v0'])
 
-	writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
+	# writer = SummaryWriter('./logs/{0}'.format(args.output_folder))
 	save_folder = './saves/{0}'.format(args.output_folder)
 	if not os.path.exists(save_folder):
 		os.makedirs(save_folder)
@@ -68,11 +75,14 @@ def main(args):
 		                 ls_backtrack_ratio=args.ls_backtrack_ratio)
 
 		# Tensorboard
-		writer.add_scalar('total_rewards/before_update',
-		                  total_rewards([ep.rewards for ep, _ in episodes]), batch)
-		writer.add_scalar('total_rewards/after_update',
-		                  total_rewards([ep.rewards for _, ep in episodes]), batch)
+		# writer.add_scalar('total_rewards/before_update',
+		#                   total_rewards([ep.rewards for ep, _ in episodes]), batch)
+		# writer.add_scalar('total_rewards/after_update',
+		#                   total_rewards([ep.rewards for _, ep in episodes]), batch)
 
+		wandb.log({"reward_before_update": total_rewards([ep.rewards for ep, _ in episodes]),
+	     			"reward_after_update":	total_rewards([ep.rewards for _, ep in episodes])
+				})
 
 		# # Save policy network
 		with open(os.path.join(save_folder, 'policy-{0}.pt'.format(batch)), 'wb') as f:

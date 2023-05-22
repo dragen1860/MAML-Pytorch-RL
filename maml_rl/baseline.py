@@ -18,8 +18,6 @@ class LinearFeatureBaseline(nn.Module):
 		self._reg_coeff = reg_coeff
 		self.linear = nn.Linear(self.feature_size, 1, bias=False)
 		self.linear.weight.data.zero_()
-		self.epsilon = 0.1
-		self.optimizer = th.optim.Adam(self.parameters(), lr=reg_coeff)
 
 
 	@property
@@ -61,25 +59,9 @@ class LinearFeatureBaseline(nn.Module):
 			                   '(maximum regularization: {0}).'.format(reg_coeff))
 		self.linear.weight.data = coeffs.data.t()
 	
-	def update_params(self):
-		
-	
+
 	def forward(self, episodes):
 		features = self._feature(episodes)
-
-		# IBP Lower Bound
-		# =================================
-		# out = torch.empty((0,))
-		# out_ep = torch.empty((0,))
-		# for feature_ep in features:
-		# 	for feature_worker in feature_ep:
-		# 		l, u =  self.compute_bounds(feature_worker, layer=self.linear)
-		# 		out_ep = torch.cat((out_ep, l.unsqueeze(0)))
-		# 	out = torch.cat((out, out_ep.unsqueeze(0)))
-		# 	out_ep = torch.empty((0,))
-		# value = out
-		# =================================
-
 		value = self.linear(features)
 		return value
 
